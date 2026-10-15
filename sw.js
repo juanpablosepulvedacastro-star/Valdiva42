@@ -1,10 +1,14 @@
 // Service worker: deja la app disponible sin conexión.
-// Estrategia: responde desde caché y actualiza en segundo plano (la versión nueva se ve al siguiente uso).
-const CACHE = 'valdivia42-v6';
+// - La app (HTML): primero la red, para ver siempre la última versión; sin señal, la copia guardada.
+// - Lo demás (íconos, fuentes, Tailwind): copia guardada al instante y actualización en segundo plano.
+const CACHE = 'valdivia42-v8';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
+  // cache: 'reload' evita guardar una copia vieja del caché HTTP del navegador.
+  e.waitUntil(caches.open(CACHE)
+    .then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -16,11 +20,28 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  const same = url.origin === self.location.origin;
+
+  if (req.mode === 'navigate' || (same && url.pathname.endsWith('.html'))) {
+    e.respondWith(
+      fetch(req, { cache: 'no-store' })
+        .then(res => {
+          if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./', copy)); }
+          return res;
+        })
+        .catch(() => caches.match('./').then(r => r || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  const key = same ? new Request(url.origin + url.pathname) : req;   // sin ?query: una sola copia por archivo
   e.respondWith(caches.open(CACHE).then(async cache => {
-    const hit = await cache.match(e.request, { ignoreSearch: true });
-    const net = fetch(e.request).then(res => {
-      if (res && (res.ok || res.type === 'opaque')) cache.put(e.request, res.clone());
+    const hit = await cache.match(key);
+    const net = fetch(req).then(res => {
+      if (res && (res.ok || res.type === 'opaque')) cache.put(key, res.clone());
       return res;
     }).catch(() => hit);
     return hit || net;
