@@ -160,8 +160,17 @@
 
   /* Tab bar */
   .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--bg); border-top: 3px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
-  .tabbar > div { max-width: 28rem; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); }
-  .tabbar button { border: 0; background: transparent; padding: 9px 0 8px; display: grid; justify-items: center; gap: 4px; font-family: var(--font-body); font-weight: 700; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .tabbar > div { max-width: 28rem; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); }
+  .tabbar button { border: 0; background: transparent; padding: 9px 0 8px; display: grid; justify-items: center; gap: 4px; font-family: var(--font-body); font-weight: 700; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); min-width: 0; }
+
+  /* Suplementación */
+  .sup-dl { display: grid; gap: 10px; margin: 14px 0 0; }
+  .sup-dl dt { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .sup-dl dd { margin: 2px 0 0; font-size: 15px; line-height: 1.55; }
+  .sup-dose { margin-top: 12px; padding: 10px 12px; background: var(--bg); border: 2px solid var(--line); border-left: 4px solid var(--accent); font-size: 14px; }
+  .sup-dose b { font-family: var(--font-mono); font-weight: 500; color: var(--accent); }
+  .sup-when { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .sup-when .badge { color: var(--accent); }
   .tabbar button[aria-current="page"] { color: var(--fg); box-shadow: inset 0 3px 0 var(--accent); }
   .tabbar svg { width: 22px; height: 22px; }
 
@@ -210,6 +219,7 @@
   <div>
     <button data-act="tab" data-tab="hoy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>Hoy</button>
     <button data-act="tab" data-tab="plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Plan</button>
+    <button data-act="tab" data-tab="suples"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="miter"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Suples</button>
     <button data-act="tab" data-tab="hist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/></svg>Historial</button>
     <button data-act="tab" data-tab="ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Ajustes</button>
   </div>
@@ -951,6 +961,63 @@ function renderHist() {
       }).join('') : '<p class="muted mt-2">Aquí aparecerá cada semana con lo que registres. El bloque parte el lunes 19 de octubre.</p>'}
     </section>`;
 }
+/* Suplementación: guía de consulta. Las dosis usan tu peso y sudoración de Ajustes → Nutrición. */
+function renderSuples() {
+  const N = S.settings.nut, W = N.peso;
+  const fondo = nutCalc({ tipo: 'run', min: 120, nut: { ch: 60 } });     // referencia: fondo de 2 h
+  const BA = Math.round(W * 0.065 * 10) / 10;                            // beta-alanina ≈ 65 mg/kg/día
+  const SUP = [
+    { code: 'SUP 01', nombre: 'Creatina monohidrato', cuando: ['Diario', 'Con una comida'],
+      que: 'El compuesto más estudiado del deporte. Recarga la fosfocreatina, la energía de los esfuerzos explosivos de 5 a 15 segundos.',
+      para: 'Potencia en sled push y sled pull, wall balls y series cortas, y mejor recuperación entre dobles jornadas. No mejora la maratón directamente, pero sostiene la fuerza HYROX mientras subes el volumen de carrera.',
+      dosis: `<b>5 g</b> al día, todos los días (incluidos los de descanso). Sin fase de carga.`,
+      nota: 'Las primeras 2–3 semanas puedes subir 1–2 kg de agua intramuscular. Empezarla ahora deja ese ajuste resuelto mucho antes de Valdivia. Busca sello Creapure o Informed Sport.' },
+    { code: 'SUP 02', nombre: 'Electrolitos y sodio', cuando: ['Pre-entreno', 'Durante', 'Post-entreno'],
+      que: 'Sales de sodio (y algo de potasio y magnesio) para reponer lo que pierdes sudando. Tu sudor es salado: deja marcas blancas en cara y jockey.',
+      para: `Evitar calambres, mareos y caída de rendimiento en fondos y en calor. Con tu sudoración de ${fmtN(N.sudor)} L/h, en un fondo bebes ≈${fondo.fluid} ml/h y necesitas ≈${fondo.naH} mg de sodio por hora.`,
+      dosis: `<b>1 tableta en 500 ml</b> 2 h antes de fondos y sesiones largas · <b>≈${fondo.naH} mg/h</b> durante (${saltText(fondo.naExtra)}, más lo que traen los geles) · después, 1,5 L por cada kg perdido.`,
+      nota: 'Para sudor salado: Precision Hydration PH 1500 (750 mg por 500 ml), Nuun Sport (~300 mg) o SaltStick (215 mg). El detalle por sesión está en "Ver Estrategia Nutricional".' },
+    { code: 'SUP 03', nombre: 'Whey protein', cuando: ['Post-entreno', 'Dobles jornadas'],
+      que: 'Proteína de suero de leche: se digiere rápido y trae mucha leucina, el aminoácido que activa la reparación muscular.',
+      para: `Reparar fibras después de fuerza HYROX y fondos, sobre todo los días de doble sesión. Ayuda a llegar a tu meta diaria de ${Math.round(1.6 * W)}–${Math.round(2 * W)} g de proteína (1,6–2 g/kg).`,
+      dosis: `<b>${Math.round(0.3 * W / 5) * 5} g</b> (0,3 g/kg) dentro de las 2 h tras entrenar. En días dobles, una toma después de cada sesión.`,
+      nota: 'Es comida, no magia: si ya comiste una buena porción de proteína después de entrenar, no hace falta. Después de fondos largos, mézclala con carbohidratos (leche, fruta o avena).' },
+    { code: 'SUP 04', nombre: 'Magnesio', cuando: ['Noche'],
+      que: 'Mineral clave en la contracción y relajación muscular y en el sistema nervioso. Se pierde en el sudor.',
+      para: 'Relajación muscular y calidad de sueño. Duermes ~6 h: cada minuto de sueño profundo cuenta para absorber la carga del bloque.',
+      dosis: '<b>200–350 mg</b> de magnesio elemental, 30–60 min antes de dormir. Bisglicinato (mejor tolerado); evita el óxido.',
+      nota: 'No pases de 350 mg al día en suplemento: más puede soltar el estómago. No reemplaza dormir más: apunta a 7 h.' },
+    { code: 'SUP 05', nombre: 'Beta-alanina', cuando: ['Diario', 'Dividida con comidas'],
+      que: 'Aminoácido que eleva la carnosina en el músculo, el amortiguador del ácido que se acumula en esfuerzos de 1 a 4 minutos.',
+      para: 'Sostener la intensidad en estaciones HYROX (wall balls, estocadas, burpees) y en los cambios de ritmo finales. Aporta poco a la maratón en sí.',
+      dosis: `<b>${fmtN(BA)} g</b> al día (≈65 mg/kg), en 3–4 tomas de 1,2–1,6 g con comidas. El efecto aparece tras 4 semanas de uso continuo.`,
+      nota: 'El hormigueo en cara y manos es normal e inofensivo; dividir la dosis lo reduce. No importa la hora: importa tomarla todos los días.' }
+  ];
+  return `<section>
+      <p class="eyebrow">Guía de consulta · ${fmtN(W)} kg</p>
+      <h2 class="font-display text-[30px] leading-[1.05] mt-1">Arsenal químico y recuperación</h2>
+      <p class="mt-2 muted">Cinco suplementos con evidencia para un bloque maratón + HYROX. La base sigue siendo comer, dormir y entrenar; esto solo suma.</p>
+    </section>
+    <div class="grid gap-4 mt-5">${SUP.map(s => `<article class="card">
+      <header class="exp-h"><span class="chip" style="--c:var(--fg)">${mark('hyrox')}<span>Suplemento</span></span><span class="exp-code">${s.code}</span></header>
+      <h3 class="font-display text-[24px] leading-[1.1]">${esc(s.nombre)}</h3>
+      <div class="sup-when">${s.cuando.map(c => `<span class="badge">${esc(c)}</span>`).join('')}</div>
+      <dl class="sup-dl">
+        <div><dt>Qué es</dt><dd>${esc(s.que)}</dd></div>
+        <div><dt>Para qué en este bloque</dt><dd>${esc(s.para)}</dd></div>
+      </dl>
+      <div class="sup-dose"><span class="eyebrow">Cuándo y cuánto</span><p class="mt-1">${s.dosis}</p></div>
+      <p class="text-[13.5px] muted mt-3">${esc(s.nota)}</p>
+    </article>`).join('')}</div>
+    <section class="card mt-5">
+      <p class="eyebrow">Reglas</p>
+      <ul class="det">
+        <li>Nada nuevo en la semana de carrera: todo se prueba antes, en los fondos.</li>
+        <li>Elige productos con sello Informed Sport o NSF Certified for Sport: garantizan que contienen lo que dicen.</li>
+        <li>Esta guía es general. Si tomas medicamentos o tienes algún problema renal o cardíaco, consúltala con un médico o nutricionista deportivo.</li>
+      </ul>
+    </section>`;
+}
 function renderAjustes() {
   const P = S.settings.paces, fc = S.settings.fcMax, N = S.settings.nut;
   const nf = (k, label, mode) => `<label class="field">${label}<input id="n-${k}" data-nut="${k}" inputmode="${mode}" value="${esc(typeof N[k] === 'number' ? fmtN(N[k]) : N[k])}" autocomplete="off"></label>`;
@@ -1249,9 +1316,9 @@ let lastDay = todayNum();
 function render() {
   build();
   renderTop();
-  const tab = ['hoy', 'plan', 'hist', 'ajustes'].includes(S.ui.tab) ? S.ui.tab : 'hoy';
+  const tab = ['hoy', 'plan', 'suples', 'hist', 'ajustes'].includes(S.ui.tab) ? S.ui.tab : 'hoy';
   document.querySelectorAll('.tabbar button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
-  $('#view').innerHTML = { hoy: renderHoy, plan: renderPlan, hist: renderHist, ajustes: renderAjustes }[tab]();
+  $('#view').innerHTML = { hoy: renderHoy, plan: renderPlan, hist: renderHist, ajustes: renderAjustes, suples: renderSuples }[tab]();
   if (tab === 'ajustes') wireAjustes();
   if (tab === 'plan') { const on = document.querySelector('#wkchips .on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
   $('#banner').hidden = storageOk;

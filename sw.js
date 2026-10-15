@@ -1,7 +1,7 @@
 // Service worker: deja la app disponible sin conexión.
 // - La app (HTML): primero la red, para ver siempre la última versión; sin señal, la copia guardada.
 // - Lo demás (íconos, fuentes, Tailwind): copia guardada al instante y actualización en segundo plano.
-const CACHE = 'valdivia42-v10';
+const CACHE = 'valdivia42-v11';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
