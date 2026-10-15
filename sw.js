@@ -1,6 +1,6 @@
 // Service worker: deja la app disponible sin conexión.
 // Estrategia: responde desde caché y actualiza en segundo plano (la versión nueva se ve al siguiente uso).
-const CACHE = 'valdivia42-v5';
+const CACHE = 'valdivia42-v6';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

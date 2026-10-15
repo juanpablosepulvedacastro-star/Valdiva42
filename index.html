@@ -252,6 +252,7 @@ const keyOf = n => { const d = new Date(n * DAY_MS); return `${d.getUTCFullYear(
 const isKey = k => typeof k === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(k) && keyOf(dn(k)) === k;
 const RACE = dn(RACE_KEY);
 const START = RACE - (WEEKS * 7 - 1);            // lunes 19-oct-2026: 126 días exactos hasta la carrera
+const PLAN_MIN = START - 2;                      // sábado previo: el fondo preparatorio se puede mover a sáb o dom
 const DATES_OK = new Date(RACE * DAY_MS).getUTCDay() === 0 && new Date(START * DAY_MS).getUTCDay() === 1;
 if (!DATES_OK) console.error('El plan no calza: la carrera debe ser domingo y el bloque partir lunes.');
 
@@ -371,6 +372,9 @@ const RECUP = run('Suave', 'Rodaje de recuperación', 6, 42, ['6 km muy suaves a
 const PLAN = {
   atleta: { meta: 'Terminar fuerte', ref21k: '2:00:00', hyroxProSim: '1:15:00', turno: '5x2' },
   carrera: { nombre: 'Maratón de Valdivia', fecha: RACE_KEY, km: 42.195 },
+  // Semana 0: fondo preparatorio el domingo antes del bloque (prueba de equipamiento y primer ciclo de geles)
+  previa: run('Fondo', 'Fondo preparatorio', 15, 105, ['14–15 km a {L}', 'Prueba zapatillas, botella y cinturón tal como los usarás en el bloque',
+    'Primer ciclo de geles: anota cómo te cayeron, es tu punto de partida para la semana 1'], { nut: { ch: 30 } }),
   semanas: [
     { fase: 'Base', foco: 'Adaptación: más frecuencia sin forzar el ritmo', dias: [
       [MOV], [run('Suave', 'Suave + progresivos', 6, 40, ['5 km continuos a {E}', '6 × 20″ progresivos a {R} con 60″ caminando'])], [hx('HF_A')],
@@ -619,17 +623,22 @@ function build() {
   applyHyrox(weeks, S.settings.hyroxDate);
   RACE_NUT = null;
   const list = [];
-  weeks.forEach((w, wi) => w.dias.forEach((day, di) => day.forEach((raw, si) => {
+  const add = (raw, week, di, si) => {
     const s = raw.ref ? { ...HY[raw.ref], ...raw } : { ...raw };
-    s.id = `w${wi + 1}d${di}s${si}`;
-    s.week = wi + 1; s.day = di; s.date = START + wi * 7 + di;
+    s.id = `w${week}d${di}s${si}`;
+    s.week = week; s.day = di; s.date = START + (week - 1) * 7 + di;
     const mv = S.moves[s.id];
-    s.eff = isKey(mv) && dn(mv) >= START && dn(mv) <= RACE ? dn(mv) : s.date;
+    s.eff = isKey(mv) && dn(mv) >= PLAN_MIN && dn(mv) <= RACE ? dn(mv) : s.date;
     if (s.nut && !isMarathon(s)) s.det = [...(s.det || []), ...nutLines(s)];
     list.push(s);
-  })));
+  };
+  add(PLAN.previa, 0, 6, 0);                     // domingo 18-oct, semana 0
+  weeks.forEach((w, wi) => w.dias.forEach((day, di) => day.forEach((raw, si) => add(raw, wi + 1, di, si))));
   MODEL = { weeks, list };
 }
+const PRE_META = { fase: 'Fondo preparatorio', foco: 'Prueba de equipamiento y primer ciclo de geles antes del bloque' };
+const weekMeta = w => w === 0 ? PRE_META : MODEL.weeks[w - 1];
+const weekName = w => w === 0 ? 'Previa' : `Semana ${w}`;
 const slotRank = s => s.slot === 'PM' ? 2 : s.slot === 'AM' ? 0 : 1;
 const sessionsOn = n => MODEL.list.filter(s => s.eff === n).sort((a, b) => slotRank(a) - slotRank(b));
 const byId = id => MODEL.list.find(s => s.id === id);
@@ -809,16 +818,15 @@ function renderTop() {
 function renderHoy() {
   const t = todayNum(), p = position(t);
   if (p.phase === 'pre') {
-    const pn = nutCalc({ tipo: 'run', min: 100, nut: { ch: 30 } });   // fondo preparatorio de 14–15 km ≈ 100′
+    const pre = MODEL.list.filter(s => s.week === 0).sort((a, b) => a.eff - b.eff);
     return `<section class="card">
       <p class="font-arcade text-[22px]" style="color:var(--frame)">START</p>
       <h2 class="font-display text-[26px] leading-tight mt-2">El bloque arranca el ${esc(longDate(START))}</h2>
       <ul class="det"><li>Hasta el sábado mantén tu rutina actual; el sábado, descanso o trote muy suave.</li>
-      <li>Domingo ${shortDate(START - 1)}: fondo preparatorio de 14–15 km a {L}. Prueba zapatillas, botella y cinturón tal como los usarás en el bloque.</li>
-      <li>Primer ciclo de geles: 1 ${esc(S.settings.nut.gel)} en los min ${pn.times.join(' y ')}, más ≈${pn.fluid} ml/h de agua con sales.</li>
-      <li>Anota cómo te cayeron los geles: es tu punto de partida para la semana 1.</li>
       <li>Revisa tus ritmos y la fecha de tu HYROX Doubles en Ajustes.</li></ul>
-    </section>`.replace('{L}', fmtLine('{L}')) + `<div class="mt-6">${strip(0)}</div>
+    </section>
+    ${pre.map(s => `<section class="mt-6"><p class="eyebrow">${s.eff === t ? 'Hoy' : 'Fondo previo'} · ${esc(longDate(s.eff))}</p><div class="mt-3">${card(s, t)}</div></section>`).join('')}
+    <div class="mt-6">${strip(0)}</div>
     <section class="mt-6"><div class="flex items-baseline justify-between"><h2 class="font-display text-2xl">Semana 1</h2><span class="text-sm muted tnum">${weekStats(1).planKm} km planificados</span></div>
     <p class="text-sm muted">${esc(MODEL.weeks[0].foco)}</p>${dayRows(1, t)}</section>`;
   }
@@ -851,6 +859,7 @@ function dayRows(w, t) {
   const ws = weekStart(w);
   return `<div class="mt-3">${DAYS.map((d, i) => {
     const n = ws + i, ss = sessionsOn(n);
+    if (n < PLAN_MIN) return '';
     return `<div class="dayrow ${n === t ? 'is-today' : ''}"><div class="dl"><span>${d}</span><b>${dayNum(n)}</b></div>
       <div class="min-w-0">${ss.length ? ss.map(s => item(s, t)).join('') : '<p class="text-sm muted py-3">Sin sesión</p>'}</div></div>`;
   }).join('')}</div>`;
@@ -858,17 +867,17 @@ function dayRows(w, t) {
 function renderPlan() {
   const t = todayNum(), p = position(t);
   const cur = p.week || (p.phase === 'post' ? 18 : 0);
-  const w = Math.min(18, Math.max(1, S.ui.week || cur || 1));
-  const W = MODEL.weeks[w - 1], ws = weekStart(w), st = weekStats(w);
-  return `<div class="wkchips" id="wkchips">${MODEL.weeks.map((x, i) => `<button data-act="week" data-w="${i + 1}" class="${i + 1 === w ? 'on' : ''} ${i + 1 === cur ? 'cur' : ''}"><b>S${i + 1}</b><small>${weekStats(i + 1).planKm} km</small></button>`).join('')}</div>
+  const w = S.ui.week === 'pre' || (!S.ui.week && p.phase === 'pre') ? 0 : Math.min(18, Math.max(1, S.ui.week || cur || 1));
+  const W = weekMeta(w), ws = weekStart(w), st = weekStats(w);
+  return `<div class="wkchips" id="wkchips"><button data-act="week" data-w="pre" class="${w === 0 ? 'on' : ''}"><b>PRE</b><small>${weekStats(0).planKm} km</small></button>${MODEL.weeks.map((x, i) => `<button data-act="week" data-w="${i + 1}" class="${i + 1 === w ? 'on' : ''} ${i + 1 === cur ? 'cur' : ''}"><b>S${i + 1}</b><small>${weekStats(i + 1).planKm} km</small></button>`).join('')}</div>
     <section class="mt-3">
-      <p class="eyebrow">${esc(W.fase)} · ${shortDate(ws)} – ${shortDate(ws + 6)}</p>
-      <div class="flex items-baseline justify-between gap-2 mt-1"><h2 class="font-display text-[32px] leading-none">Semana ${w}</h2>
+      <p class="eyebrow">${esc(W.fase)} · ${shortDate(Math.max(ws, PLAN_MIN))} – ${shortDate(ws + 6)}</p>
+      <div class="flex items-baseline justify-between gap-2 mt-1"><h2 class="font-display text-[32px] leading-none">${weekName(w)}</h2>
         <span class="text-sm muted tnum">${st.planKm} km · ${st.done}/${st.total} hechas</span></div>
       <p class="mt-1">${esc(W.foco)}</p>
       ${dayRows(w, t)}
       <div class="grid grid-cols-2 gap-2 mt-4">
-        <button class="btn" data-act="week" data-w="${Math.max(1, w - 1)}" ${w === 1 ? 'disabled style="opacity:.4"' : ''}>← Semana ${Math.max(1, w - 1)}</button>
+        <button class="btn" data-act="week" data-w="${w <= 1 ? 'pre' : w - 1}" ${w === 0 ? 'disabled style="opacity:.4"' : ''}>← ${w <= 1 ? 'Previa' : `Semana ${w - 1}`}</button>
         <button class="btn" data-act="week" data-w="${Math.min(18, w + 1)}" ${w === 18 ? 'disabled style="opacity:.4"' : ''}>Semana ${Math.min(18, w + 1)} →</button>
       </div>
     </section>`;
@@ -897,7 +906,7 @@ function renderHist() {
   const logs = Object.values(S.logs).filter(l => l.status === 'done');
   const km = logs.reduce((a, l) => a + (Number.isFinite(+l.dist) ? +l.dist : 0), 0);
   const weeksWithLogs = new Set(MODEL.list.filter(s => S.logs[s.id]).map(s => s.week));
-  const shown = []; for (let w = 18; w >= 1; w--) if (w <= cur || weeksWithLogs.has(w)) shown.push(w);
+  const shown = []; for (let w = 18; w >= 0; w--) if (w <= cur || weeksWithLogs.has(w)) shown.push(w);
   const tile = (v, l) => `<div><b class="font-mono text-[38px] font-normal leading-none tnum block" style="color:var(--gold)">${v}</b><span class="text-[13px] muted">${l}</span></div>`;
   return `<section class="grid grid-cols-3 gap-3">
       ${tile(`${done}/${due.length}`, 'sesiones hechas a la fecha')}
@@ -916,7 +925,7 @@ function renderHist() {
         const ss = MODEL.list.filter(s => s.week === w && S.logs[s.id]).sort((a, b) => a.eff - b.eff);
         return `<details class="border-t py-3" style="border-color:var(--line)" ${w === cur ? 'open' : ''}>
           <summary class="flex items-center justify-between gap-3">
-            <span class="min-w-0"><span class="font-display text-xl">Semana ${w}</span> <span class="text-xs muted">${shortDate(ws)} – ${shortDate(ws + 6)} · ${esc(MODEL.weeks[w - 1].fase)}</span></span>
+            <span class="min-w-0"><span class="font-display text-xl">${weekName(w)}</span> <span class="text-xs muted">${shortDate(Math.max(ws, PLAN_MIN))} – ${shortDate(ws + 6)} · ${esc(weekMeta(w).fase)}</span></span>
             <span class="text-sm tnum flex-none">${st.done}/${st.total} · ${fmtKm(st.doneKm)}/${st.planKm} km</span></summary>
           <div class="grid gap-2 mt-3">${ss.length ? ss.map(s => `<div class="logwrap"><button class="item" data-act="open" data-id="${s.id}"><span class="spr">${sprite(s.tipo, 2)}</span><span class="min-w-0 flex-1"><span class="block font-semibold">${esc(s.titulo)}</span><span class="block text-xs muted">${DAYS[(s.eff - START) % 7]} ${shortDate(s.eff)}</span></span>${S.logs[s.id].status === 'done' ? '<span class="st" style="color:var(--ok)">✓</span>' : '<span class="st muted">Omitida</span>'}</button>${logBox(S.logs[s.id])}</div>`).join('') : '<p class="text-sm muted">Sin registros esta semana.</p>'}</div>
         </details>`;
@@ -1094,8 +1103,8 @@ function openMove(id) {
   openSheet(`<p class="eyebrow">Cambiar día</p>
     <h2 class="font-display text-[26px] leading-tight mt-1">${esc(s.titulo)}</h2>
     <p class="text-sm muted mt-1">Día original: ${esc(longDate(s.date))}</p>
-    <div class="seg mt-4" id="mv-days">${DAYS.map((d, i) => `<button type="button" data-n="${ws + i}" aria-pressed="${ws + i === target}">${d} ${dayNum(ws + i)}</button>`).join('')}</div>
-    <label class="field mt-3">U otra fecha del bloque<input type="date" id="mv-date" min="${keyOf(START)}" max="${keyOf(RACE)}" value="${keyOf(target)}"></label>
+    <div class="seg mt-4" id="mv-days">${DAYS.map((d, i) => ws + i < PLAN_MIN ? '' : `<button type="button" data-n="${ws + i}" aria-pressed="${ws + i === target}">${d} ${dayNum(ws + i)}</button>`).join('')}</div>
+    <label class="field mt-3">U otra fecha del bloque<input type="date" id="mv-date" min="${keyOf(PLAN_MIN)}" max="${keyOf(RACE)}" value="${keyOf(target)}"></label>
     <p id="mv-warn" class="text-sm mt-3"></p>
     <button class="btn-primary mt-4" id="mv-go">Mover sesión</button>
     ${s.eff !== s.date ? '<button class="btn w-full mt-2" id="mv-reset">Volver al día original</button>' : ''}`, el => {
@@ -1108,7 +1117,7 @@ function openMove(id) {
         : `Ese día ya tiene: ${c.map(x => x.titulo).join(' + ')}.${heavy.length ? ' Ojo: juntar calidad o fondo con otra sesión exigente aumenta la fatiga.' : ''}`;
     };
     el.querySelector('#mv-days').addEventListener('click', e => { const b = e.target.closest('button[data-n]'); if (!b) return; target = +b.dataset.n; inp.value = keyOf(target); show(); });
-    inp.addEventListener('change', () => { if (isKey(inp.value) && dn(inp.value) >= START && dn(inp.value) <= RACE) { target = dn(inp.value); show(); } });
+    inp.addEventListener('change', () => { if (isKey(inp.value) && dn(inp.value) >= PLAN_MIN && dn(inp.value) <= RACE) { target = dn(inp.value); show(); } });
     show();
     el.querySelector('#mv-go').addEventListener('click', () => {
       if (target === s.date) delete S.moves[id]; else S.moves[id] = keyOf(target);
@@ -1236,7 +1245,7 @@ document.addEventListener('click', e => {
   if (act !== 'close' && b.closest('#sheet') && ['done', 'skip', 'move', 'nut'].includes(act)) closeSheet();
   switch (act) {
     case 'tab': setTab(b.dataset.tab); break;
-    case 'week': S.ui.week = +b.dataset.w; save(); render(); break;
+    case 'week': S.ui.week = b.dataset.w === 'pre' ? 'pre' : +b.dataset.w; save(); render(); break;
     case 'goweek': S.ui.week = +b.dataset.w; setTab('plan'); break;
     case 'open': openSession(id); break;
     case 'day': openDay(+b.dataset.n); break;
